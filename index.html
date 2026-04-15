@@ -11,7 +11,7 @@
     <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
 
-    <!-- Python no navegador -->
+    <!-- Pyodide -->
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
 
     <style>
@@ -54,11 +54,6 @@
             cursor: pointer;
         }
 
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
         #saida {
             background: black;
             color: #22c55e;
@@ -73,22 +68,6 @@
             margin-top: 10px;
             font-size: 14px;
             color: #94a3b8;
-        }
-        footer {
-            text-align: center;
-            padding: 12px;
-            border-top: 1px solid #1f2937;
-            font-size: 14px;
-            color: #94a3b8;
-        }
-
-        footer a {
-            color: #60a5fa;
-            text-decoration: none;
-        }
-
-        footer a:hover {
-            text-decoration: underline;
         }
     </style>
 </head>
@@ -106,7 +85,7 @@
 
         <br><br>
 
-        <button id="runBtn" onclick="executar()">▶ Executar</button>
+        <button onclick="executar()">▶ Executar</button>
         <button onclick="limpar()">🧹 Limpar</button>
         <button onclick="salvar()">💾 Salvar</button>
 
@@ -115,20 +94,51 @@
         <pre id="saida"></pre>
 
     </main>
-    <footer> Criado com ❤️ por <a href="https://github.com/davidsousadev" target="_blank"> David Sousa </a> </footer>
-    
+
+    <footer>
+        Criado com ❤️ por <a href="https://github.com/davidsousadev" target="_blank">David Sousa</a>
+    </footer>
+
     <!-- CodeMirror -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+
+    <!-- 🔥 ADDONS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
 
     <script>
         let editor = CodeMirror.fromTextArea(document.getElementById("editor"), {
             mode: "python",
             theme: "material-darker",
-            lineNumbers: true
-        });
+            lineNumbers: true,
 
-        editor.setValue(``);
+            // 🔥 AUTO INDENTAÇÃO
+            indentUnit: 4,
+            tabSize: 4,
+            indentWithTabs: false,
+            smartIndent: true,
+
+            // 🔥 AUTO FECHAMENTO
+            autoCloseBrackets: true,
+            matchBrackets: true,
+
+            extraKeys: {
+                "Tab": function (cm) {
+                    if (cm.somethingSelected()) {
+                        cm.indentSelection("add");
+                    } else {
+                        cm.replaceSelection("    ", "end");
+                    }
+                },
+                "Shift-Tab": function (cm) {
+                    cm.indentSelection("subtract");
+                },
+                "Enter": function (cm) {
+                    cm.execCommand("newlineAndIndent");
+                }
+            }
+        });
 
         let pyodide;
         let pronto = false;
@@ -137,12 +147,11 @@
         async function iniciarPython() {
             pyodide = await loadPyodide();
             pronto = true;
-
             document.getElementById("status").innerText = "Python pronto 🚀";
         }
         iniciarPython();
 
-        // Executar código Python
+        // Executar código
         async function executar() {
             const saida = document.getElementById("saida");
             const status = document.getElementById("status");
@@ -152,25 +161,43 @@
                 return;
             }
 
+            let codigo = editor.getValue();
+
+            if (!codigo.trim()) {
+                saida.innerText = "Digite um código Python!";
+                return;
+            }
+
+            if (codigo.includes("<html") || codigo.includes("<!DOCTYPE")) {
+                saida.innerText = "Erro: HTML não é código Python!";
+                return;
+            }
+
             saida.innerText = "";
             status.innerText = "Executando...";
 
             try {
-                const codigo = editor.getValue();
+                const codigoIndentado = codigo
+                    .split("\n")
+                    .map(l => "    " + l)
+                    .join("\n");
 
                 const resultado = await pyodide.runPythonAsync(`
-                    import sys
-                    from io import StringIO
+import sys
+from io import StringIO
 
-                    _output = StringIO()
-                    sys.stdout = _output
+_output = StringIO()
+sys.stdout = _output
 
-                    try:
-                    ${codigo.split("\n").map(l => "    " + l).join("\n")}
-                    except Exception as e:
-                        print(e)
+def __run_user_code():
+${codigoIndentado}
 
-                    _output.getvalue()
+try:
+    __run_user_code()
+except Exception as e:
+    print(e)
+
+_output.getvalue()
         `);
 
                 saida.innerText = resultado || "(sem saída)";
@@ -182,19 +209,17 @@
             }
         }
 
-        // Limpar saída
+        // Limpar
         function limpar() {
             document.getElementById("saida").innerText = "";
         }
 
-        // Salvar como .py
+        // Salvar
         function salvar() {
             let nome = prompt("Nome do arquivo:", "codigo.py");
             if (!nome) return;
 
-            if (!nome.endsWith(".py")) {
-                nome += ".py";
-            }
+            if (!nome.endsWith(".py")) nome += ".py";
 
             let blob = new Blob([editor.getValue()], { type: "text/x-python" });
             let link = document.createElement("a");
