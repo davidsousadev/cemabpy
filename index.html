@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CemabPY</title>
+
+    <!-- CodeMirror -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+
+    <!-- Python no navegador -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            background: #0f172a;
+            color: white;
+            font-family: Arial;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            border-bottom: 1px solid #1f2937;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        header img {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+        }
+
+        main {
+            max-width: 900px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin-right: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #saida {
+            background: black;
+            color: #22c55e;
+            padding: 10px;
+            min-height: 120px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-family: monospace;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <img src="https://cemabjs.vercel.app/icon.jpeg">
+        <span>CEMAB - Python</span>
+    </header>
+
+    <main>
+
+        <textarea id="editor"></textarea>
+
+        <br><br>
+
+        <button id="runBtn" onclick="executar()">▶ Executar</button>
+        <button onclick="limpar()">🧹 Limpar</button>
+        <button onclick="salvar()">💾 Salvar</button>
+
+        <div id="status">Carregando Python...</div>
+
+        <pre id="saida"></pre>
+
+    </main>
+
+    <!-- CodeMirror -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+
+    <script>
+        let editor = CodeMirror.fromTextArea(document.getElementById("editor"), {
+            mode: "python",
+            theme: "material-darker",
+            lineNumbers: true
+        });
+
+        editor.setValue();
+
+        let pyodide;
+        let pronto = false;
+
+        // Inicializar Python
+        async function iniciarPython() {
+            pyodide = await loadPyodide();
+            pronto = true;
+
+            document.getElementById("status").innerText = "Python pronto 🚀";
+        }
+        iniciarPython();
+
+        // Executar código Python
+        async function executar() {
+            const saida = document.getElementById("saida");
+            const status = document.getElementById("status");
+
+            if (!pronto) {
+                status.innerText = "Ainda carregando...";
+                return;
+            }
+
+            saida.innerText = "";
+            status.innerText = "Executando...";
+
+            try {
+                const codigo = editor.getValue();
+
+                const resultado = await pyodide.runPythonAsync(`
+                    import sys
+                    from io import StringIO
+
+                    _output = StringIO()
+                    sys.stdout = _output
+
+                    try:
+                    ${codigo.split("\n").map(l => "    " + l).join("\n")}
+                    except Exception as e:
+                        print(e)
+
+                    _output.getvalue()
+        `);
+
+                saida.innerText = resultado || "(sem saída)";
+                status.innerText = "Executado com sucesso ✅";
+
+            } catch (erro) {
+                saida.innerText = erro;
+                status.innerText = "Erro ❌";
+            }
+        }
+
+        // Limpar saída
+        function limpar() {
+            document.getElementById("saida").innerText = "";
+        }
+
+        // Salvar como .py
+        function salvar() {
+            let nome = prompt("Nome do arquivo:", "codigo.py");
+            if (!nome) return;
+
+            if (!nome.endsWith(".py")) {
+                nome += ".py";
+            }
+
+            let blob = new Blob([editor.getValue()], { type: "text/x-python" });
+            let link = document.createElement("a");
+
+            link.href = URL.createObjectURL(blob);
+            link.download = nome;
+            link.click();
+        }
+    </script>
+
+</body>
+
+</html>
