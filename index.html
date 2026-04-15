@@ -62,6 +62,22 @@
             border-radius: 6px;
             margin-top: 15px;
             font-family: monospace;
+            white-space: pre-wrap;
+            outline: none;
+            cursor: text;
+        }
+
+        #cursor {
+            display: inline-block;
+            width: 8px;
+            background: #22c55e;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
         }
 
         #status {
@@ -70,22 +86,11 @@
             color: #94a3b8;
         }
 
-        footer {
-            text-align: center;
-            padding: 12px;
-            border-top: 1px solid #1f2937;
-            font-size: 14px;
-            color: #94a3b8;
+
+        .blink {
+            animation: blink 1s infinite;
         }
 
-        footer a {
-            color: #60a5fa;
-            text-decoration: none;
-        }
-
-        footer a:hover {
-            text-decoration: underline;
-        }
     </style>
 </head>
 
@@ -108,19 +113,18 @@
 
         <div id="status">Carregando Python...</div>
 
-        <pre id="saida"></pre>
+        <pre id="saida" tabindex="0"></pre>
 
     </main>
 
-    <footer>
-        Criado com ❤️ por <a href="https://github.com/davidsousadev" target="_blank">David Sousa</a>
+    <footer style="text-align:center; padding:12px; color:#94a3b8;">
+        Criado com ❤️ por David Sousa
     </footer>
 
     <!-- CodeMirror -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 
-    <!-- 🔥 ADDONS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
 
@@ -129,109 +133,163 @@
             mode: "python",
             theme: "material-darker",
             lineNumbers: true,
-
-            // 🔥 AUTO INDENTAÇÃO
             indentUnit: 4,
             tabSize: 4,
             indentWithTabs: false,
             smartIndent: true,
-
-            // 🔥 AUTO FECHAMENTO
             autoCloseBrackets: true,
-            matchBrackets: true,
-
-            extraKeys: {
-                "Tab": function (cm) {
-                    if (cm.somethingSelected()) {
-                        cm.indentSelection("add");
-                    } else {
-                        cm.replaceSelection("    ", "end");
-                    }
-                },
-                "Shift-Tab": function (cm) {
-                    cm.indentSelection("subtract");
-                },
-                "Enter": function (cm) {
-                    cm.execCommand("newlineAndIndent");
-                }
-            }
+            matchBrackets: true
         });
 
         let pyodide;
         let pronto = false;
 
-        // Inicializar Python
+        let saida = document.getElementById("saida");
+        let inputResolve = null;
+        let buffer = "";
+
+        // ===== TERMINAL =====
+        function renderCursor(texto) {
+            saida.innerHTML = "";
+
+            const textNode = document.createTextNode(texto);
+            const cursor = document.createElement("span");
+
+            cursor.id = "cursor";
+            cursor.className = "blink";
+            cursor.textContent = " "; // espaço visível
+
+            saida.appendChild(textNode);
+            saida.appendChild(cursor);
+
+            moverCursorFim();
+        }
+
+        let terminalTexto = "";
+
+        function append(txt) {
+            terminalTexto += txt;
+            renderCursor(terminalTexto);
+        }
+
+        function moverCursorFim() {
+            const range = document.createRange();
+            const sel = window.getSelection();
+
+            range.selectNodeContents(saida);
+            range.collapse(false);
+
+            sel.removeAllRanges();
+            sel.addRange(range);
+
+            saida.scrollTop = saida.scrollHeight;
+        }
+
+        // foco (desktop + tablet)
+        saida.addEventListener("click", () => saida.focus());
+        saida.addEventListener("touchstart", () => saida.focus());
+
+        // ===== INPUT =====
+        saida.addEventListener("keydown", function (e) {
+
+            if (!inputResolve) return;
+
+            if (e.key === "Enter") {
+                e.preventDefault();
+                append("\n");
+                inputResolve(buffer);
+                buffer = "";
+                inputResolve = null;
+                return;
+            }
+
+            if (e.key === "Backspace") {
+                e.preventDefault();
+                buffer = buffer.slice(0, -1);
+                let texto = saida.innerText.slice(0, -1);
+                renderCursor(texto);
+                return;
+            }
+
+            if (e.key.length === 1) {
+                e.preventDefault();
+                buffer += e.key;
+                append(e.key);
+            }
+        });
+
+        // ===== PYTHON =====
         async function iniciarPython() {
             pyodide = await loadPyodide();
             pronto = true;
             document.getElementById("status").innerText = "Python pronto 🚀";
+            terminalTexto = "";
+            renderCursor("");
         }
         iniciarPython();
 
-        // Executar código
+        // ===== EXECUÇÃO =====
         async function executar() {
-            const saida = document.getElementById("saida");
-            const status = document.getElementById("status");
 
-            if (!pronto) {
-                status.innerText = "Ainda carregando...";
-                return;
-            }
+            if (!pronto) return;
 
             let codigo = editor.getValue();
 
-            if (!codigo.trim()) {
-                saida.innerText = "Digite um código Python!";
-                return;
-            }
-
-            if (codigo.includes("<html") || codigo.includes("<!DOCTYPE")) {
-                saida.innerText = "Erro: HTML não é código Python!";
-                return;
-            }
-
-            saida.innerText = "";
-            status.innerText = "Executando...";
+            buffer = "";
+            terminalTexto = "";
+            renderCursor("");
 
             try {
-                const codigoIndentado = codigo
+
+                window.pegarInput = (msg) => {
+                    append(msg);
+                    saida.focus();
+                    return new Promise(resolve => {
+                        inputResolve = resolve;
+                    });
+                };
+
+                window.escrever = (txt) => {
+                    append(txt);
+                };
+
+                // 🔥 garante await no input
+                codigo = codigo.replaceAll("input(", "await input(");
+
+                // 🔥 indentação CORRETA
+                let codigoIndentado = codigo
                     .split("\n")
                     .map(l => "    " + l)
                     .join("\n");
 
-                const resultado = await pyodide.runPythonAsync(`
-import sys
-from io import StringIO
+                let pycode =
+                    "from js import pegarInput, escrever\n" +
+                    "\n" +
+                    "def print(*args):\n" +
+                    "    escrever(' '.join(map(str,args)) + '\\n')\n" +
+                    "\n" +
+                    "async def input(msg=''):\n" +
+                    "    return await pegarInput(msg)\n" +
+                    "\n" +
+                    "async def __run():\n" +
+                    codigoIndentado + "\n" +
+                    "\n" +
+                    "await __run()";
 
-_output = StringIO()
-sys.stdout = _output
-
-def __run_user_code():
-${codigoIndentado}
-
-try:
-    __run_user_code()
-except Exception as e:
-    print(e)
-
-_output.getvalue()
-        `);
-
-                saida.innerText = resultado || "(sem saída)";
-                status.innerText = "Executado com sucesso ✅";
+                await pyodide.runPythonAsync(pycode);
 
             } catch (erro) {
-                saida.innerText = erro;
-                status.innerText = "Erro ❌";
+                append("\\nErro: " + erro + "\\n");
             }
         }
 
-        // Limpar
+        // ===== UTIL =====
         function limpar() {
-            document.getElementById("saida").innerText = "";
+            buffer = "";
+            terminalTexto = "";
+            renderCursor("");
         }
 
-        // Salvar
         function salvar() {
             let nome = prompt("Nome do arquivo:", "codigo.py");
             if (!nome) return;
