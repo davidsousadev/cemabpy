@@ -92,7 +92,6 @@
         .blink {
             animation: blink 1s infinite;
         }
-
     </style>
 </head>
 
@@ -114,19 +113,21 @@
         <button onclick="salvar()">💾 Salvar</button>
 
         <div id="status">Carregando Python...</div>
-<input id="hiddenInput" style="
-    position: absolute;
-    opacity: 0;
-    height: 0;
-    width: 0;
-    pointer-events: none;
-">
+        <input id="hiddenInput" style="
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            opacity: 0.01;
+            height: 1px;
+            width: 1px;
+            z-index: 999;
+        " autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="text">
         <pre id="saida" tabindex="0"></pre>
 
     </main>
 
     <footer style="text-align:center; padding:12px; color:#94a3b8;">
-        Criado com ❤️ por David Sousa
+        Criado com ❤️ por <a href="https://github.com/davidsousadev" target="_blank">David Sousa</a>
     </footer>
 
     <!-- CodeMirror -->

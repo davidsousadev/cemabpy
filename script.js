@@ -60,7 +60,9 @@ function finalizarInput() {
     inputResolve = null;
     hiddenInput.value = "";
 }
-
+hiddenInput.setAttribute("autocapitalize", "off");
+hiddenInput.setAttribute("autocorrect", "off");
+hiddenInput.setAttribute("spellcheck", "false");
 // 🔥 1. BEFOREINPUT (mais confiável no mobile moderno)
 hiddenInput.addEventListener("beforeinput", (e) => {
     if (!inputResolve) return;
